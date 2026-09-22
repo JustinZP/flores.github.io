@@ -805,7 +805,7 @@ const musica = document.getElementById("musica");
 const btnMusica = document.getElementById("btnMusica");
 let sonando = false;
 
-musica.volume = 0.04;
+musica.volume = 0.3;
 
 btnMusica.addEventListener("click", () => {
   if (sonando) {
