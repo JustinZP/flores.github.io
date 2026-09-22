@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flores Amarillas 💛</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Cinzel+Decorative:wght@700;900&family=Berkshire+Swash&family=Quicksand:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Audio -->
+  <audio id="musica" loop>
+    <source src="musica/flores-amarillas.mp3" type="audio/mpeg">
+  </audio>
+
+  <button id="btnMusica" class="btn-musica">🔇</button>
+
+  <!-- Botón "Para ti": abre un mensaje especial en una tarjeta propia,
+       en vez del alert() feo del navegador -->
+  <button id="btnParaTi" class="btn-para-ti">
+    <span class="btn-para-ti-icono">💌</span> Para ti
+  </button>
+
+  <!-- Modal "Para ti" -->
+  <div class="modal-para-ti" id="modalParaTi">
+    <div class="modal-para-ti-tarjeta">
+      <button class="modal-para-ti-cerrar" id="cerrarParaTi" aria-label="Cerrar">✕</button>
+      <div class="modal-para-ti-icono">🌻</div>
+      <h2 class="modal-para-ti-titulo">Para ti, Allie 💛</h2>
+      <p class="modal-para-ti-texto">
+        Que cada pétalo de este ramo te recuerde lo mucho que iluminas todo
+        lo que tocas. Ojalá nunca te falten motivos para sonreír, personas
+        que te valoren como mereces y muchísimas flores amarillas en el
+        camino. ✨
+      </p>
+      <button class="modal-para-ti-aceptar" id="aceptarParaTi">Gracias 💛</button>
+    </div>
+  </div>
+
+  <!-- Intro -->
+  <div class="intro" id="intro">
+    <div class="tarjeta">
+      <h1 class="intro-titulo">Feliz Día de las<br>Flores Amarillas</h1>
+      <img src="flores/imagen1.gif" alt="Flores Amarillas" class="intro-icono">
+      <p class="intro-fecha">21 DE SEPTIEMBRE</p>
+      <button id="btnEntrar" class="btn-entrar">Porque te las mereces ✨</button>
+    </div>
+  </div>
+
+  <!-- Antesala / transición -->
+  <div class="antesala" id="antesala">
+    <div class="antesala-nucleo"></div>
+  </div>
+
+  <div class="escena">
+
+    <!-- Fondo: aquí se dibujan estrellas, nebulosa, vórtice y la flor (ahora como
+         imagen pre-renderizada, ver script.js -> CONFIG.imagenFlor) -->
+    <canvas id="canvas"></canvas>
+
+    <!-- Título -->
+    <h1 class="titulo">¡Feliz día de las<br>Flores Amarillas!</h1>
+
+    <!-- Mensajes -->
+    <!-- (los mensajes fijos se quitaron; ahora el nombre va en el centro
+         de la flor y los piropos orbitan como tarjetas) -->
+
+    <!-- Zona central: invisible, solo marca dónde va la flor y capta el click -->
+    <div class="centro" id="centro">
+      <div class="nombre-centro">Allie</div>
+    </div>
+
+    <div class="orbita-mensajes" id="orbitaMensajes"></div>
+
+    <div class="corazoncito c1">♥</div>
+    <div class="corazoncito c2">♥</div>
+    <div class="corazoncito c3">♥</div>
+    <div class="corazoncito c4">♥</div>
+
+    <div class="pista">GIRA LA IMAGEN ✨</div>
+
+  </div>
+
+  <script src="script.js"></script>
+
+</body>
+</html>
