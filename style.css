@@ -267,6 +267,7 @@ html, body {
   position: fixed;
   font-family: 'Quicksand', sans-serif;
   font-weight: 600;
+  font-size: 15px; /* tamaño fijo: la variación de tamaño la da el transform: scale() en JS */
   color: #fff2b8; /* amarillo pastel */
   background: linear-gradient(160deg, rgba(40,30,10,0.55), rgba(10,8,3,0.55));
   border: 1px solid rgba(255,217,61,0.45);
