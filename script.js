@@ -125,9 +125,26 @@ function ajustarTamano() {
 }
 ajustarTamano();
 
+// Posición del centro del ramo, CACHEADA. Antes se llamaba a
+// centro.getBoundingClientRect() en cada frame de animación Y en cada
+// evento de mousemove mientras arrastrabas la flor — eso fuerza al
+// navegador a recalcular el layout ("reflow") muchísimas veces por
+// segundo y era la causa principal del lag al mover el ramo. Ahora solo
+// se recalcula cuando cambia el tamaño de la ventana.
+let centroX = 0;
+let centroY = 0;
+
+function actualizarPosicionCentro() {
+  const rect = centro.getBoundingClientRect();
+  centroX = rect.left + rect.width / 2;
+  centroY = rect.top + rect.height / 2;
+}
+actualizarPosicionCentro();
+
 window.addEventListener("resize", () => {
   ajustarTamano();
   crearParticulas();
+  actualizarPosicionCentro();
 });
 
 window.addEventListener("mousemove", (e) => {
@@ -151,10 +168,9 @@ let anguloAlEmpezarArrastre = 0;
 let rotacionAlEmpezarArrastre = 0;
 
 function anguloDesdeCentro(clientX, clientY) {
-  const rect = centro.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2 - 25;
-  return Math.atan2(clientY - cy, clientX - cx);
+  // Usa la posición cacheada en vez de leerla del DOM en cada movimiento
+  // del mouse (esto es lo que hacía que arrastrar la flor se sintiera con lag).
+  return Math.atan2(clientY - (centroY - 25), clientX - centroX);
 }
 
 function empezarArrastre(clientX, clientY) {
@@ -473,33 +489,83 @@ if (CONFIG.imagenFlor.usarImagenPersonalizada) {
 }
 
 // Quita el fondo blanco (o casi blanco) de una imagen ya cargada,
-// devolviendo un <canvas> con esos píxeles vueltos transparentes. Se hace
-// UNA sola vez por imagen, no en cada frame. "umbral" define qué tan
-// blanco debe ser un píxel para desaparecer, y "suavizado" crea un
-// degradado de opacidad cerca del umbral para que el borde del dibujo no
-// se vea "cortado" con serrucho.
-function quitarFondoBlanco(img, umbral = 235, suavizado = 30) {
+// devolviendo un <canvas> con esos píxeles vueltos transparentes.
+//
+// OJO: no basta con "borrar todo píxel blanco", porque un dibujo puede
+// tener partes blancas por dentro (como el cuerpo de Snoopy) que NO son
+// fondo, y borrarlas también deja el dibujo hueco/negro. Por eso se hace
+// un "flood fill" (relleno por contagio) que arranca SOLO desde el borde
+// de la imagen: así solo desaparece el blanco que está conectado al
+// borde (el fondo real), y el blanco de adentro del dibujo queda intacto.
+function quitarFondoBlanco(img, umbral = 235, tolerancia = 40) {
+  const ancho = img.naturalWidth || img.width;
+  const alto = img.naturalHeight || img.height;
   const off = document.createElement("canvas");
-  off.width = img.naturalWidth || img.width;
-  off.height = img.naturalHeight || img.height;
+  off.width = ancho;
+  off.height = alto;
   const octx = off.getContext("2d");
   octx.drawImage(img, 0, 0);
 
   try {
-    const datos = octx.getImageData(0, 0, off.width, off.height);
+    const datos = octx.getImageData(0, 0, ancho, alto);
     const px = datos.data;
-    const limiteInferior = Math.max(umbral - suavizado, 0);
+    const totalPixeles = ancho * alto;
+    const esBlanco = (idx) => px[idx] >= umbral && px[idx + 1] >= umbral && px[idx + 2] >= umbral;
 
-    for (let i = 0; i < px.length; i += 4) {
-      const r = px[i], g = px[i + 1], b = px[i + 2];
-      const minCanal = Math.min(r, g, b);
+    const visitado = new Uint8Array(totalPixeles);
+    const vueltoTransparente = new Uint8Array(totalPixeles);
+    const pila = [];
 
-      if (minCanal >= umbral) {
-        px[i + 3] = 0; // blanco puro (o casi): totalmente transparente
-      } else if (minCanal > limiteInferior) {
-        // zona de transición: baja la opacidad de forma gradual
-        const factor = (minCanal - limiteInferior) / (umbral - limiteInferior);
-        px[i + 3] = Math.round(px[i + 3] * (1 - factor));
+    const agregar = (x, y) => {
+      if (x < 0 || y < 0 || x >= ancho || y >= alto) return;
+      pila.push(y * ancho + x);
+    };
+
+    // Semillas: todo el contorno de la imagen (arriba, abajo, izquierda, derecha)
+    for (let x = 0; x < ancho; x++) { agregar(x, 0); agregar(x, alto - 1); }
+    for (let y = 0; y < alto; y++) { agregar(0, y); agregar(ancho - 1, y); }
+
+    while (pila.length) {
+      const pos = pila.pop();
+      if (visitado[pos]) continue;
+      visitado[pos] = 1;
+
+      const idx = pos * 4;
+      if (!esBlanco(idx)) continue; // no es fondo: se corta la propagación acá
+
+      px[idx + 3] = 0;
+      vueltoTransparente[pos] = 1;
+
+      const x = pos % ancho;
+      const y = (pos / ancho) | 0;
+      agregar(x + 1, y);
+      agregar(x - 1, y);
+      agregar(x, y + 1);
+      agregar(x, y - 1);
+    }
+
+    // Segunda pasada: suaviza el borde entre lo que quedó transparente y
+    // lo que no, para que no se vea un contorno duro tipo "recorte con tijera".
+    const limiteSuave = Math.max(umbral - tolerancia, 0);
+    for (let y = 0; y < alto; y++) {
+      for (let x = 0; x < ancho; x++) {
+        const pos = y * ancho + x;
+        if (vueltoTransparente[pos]) continue;
+
+        const idx = pos * 4;
+        const minCanal = Math.min(px[idx], px[idx + 1], px[idx + 2]);
+        if (minCanal < limiteSuave) continue;
+
+        const vecinoTransparente =
+          (x > 0 && vueltoTransparente[pos - 1]) ||
+          (x < ancho - 1 && vueltoTransparente[pos + 1]) ||
+          (y > 0 && vueltoTransparente[pos - ancho]) ||
+          (y < alto - 1 && vueltoTransparente[pos + ancho]);
+
+        if (vecinoTransparente) {
+          const factor = (minCanal - limiteSuave) / (umbral - limiteSuave);
+          px[idx + 3] = Math.round(px[idx + 3] * (1 - factor));
+        }
       }
     }
 
@@ -580,9 +646,8 @@ function dibujarUnaFlor(cx, cy, escalaFlor, tiempo, faseRot, opciones = {}) {
 }
 
 function dibujarRamo(tiempo) {
-  const rect = centro.getBoundingClientRect();
-  const cxBase = rect.left + rect.width / 2;
-  const cyBase = rect.top + rect.height / 2;
+  const cxBase = centroX;
+  const cyBase = centroY;
   const durMs = CONFIG.ramo.duracionAparicion * 1000;
 
   CONFIG.ramo.flores.forEach((flor, i) => {
@@ -670,9 +735,8 @@ function animar(tiempo) {
     p.dibujar();
   });
 
-  const rect = centro.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2 - 25;
+  const cx = centroX;
+  const cy = centroY - 25;
 
   dibujarVortice(tiempo, cx, cy);
   dibujarRamo(tiempo);
@@ -696,9 +760,8 @@ for (let i = 0; i < CONFIG.petalosCayendo.cantidad; i++) {
 
 /* ================= CHISPAS AL TOCAR LA FLOR ================= */
 centro.addEventListener("click", () => {
-  const rect = centro.getBoundingClientRect();
-  const cx = rect.left + rect.width / 2;
-  const cy = rect.top + rect.height / 2 - 25;
+  const cx = centroX;
+  const cy = centroY - 25;
 
   for (let i = 0; i < 18; i++) {
     const chispa = document.createElement("div");
@@ -763,9 +826,8 @@ if (CONFIG.mensajesOrbita.activo) {
   }
 
   const animarOrbita = (tiempo) => {
-    const rect = centro.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2 - 40;
+    const cx = centroX;
+    const cy = centroY - 40;
 
     // 1) posición "ideal" de cada tarjeta según su órbita. Ya NO avanza
     //    sola con el tiempo: el ángulo depende de "rotacionManual", el
@@ -792,7 +854,10 @@ if (CONFIG.mensajesOrbita.activo) {
       item.el.style.transform = `translate(-50%, -50%) scale(${escala})`;
       item.el.style.opacity = opacidad;
       item.el.style.zIndex = Math.round(profundidad * 10) + 2;
-      item.el.style.fontSize = (13 + profundidad * 6) + "px";
+      // El tamaño ya lo da el "scale()" de arriba; antes también se
+      // cambiaba el font-size en cada frame, pero eso obliga al navegador
+      // a remedir el texto (reflow) 16 veces por frame y era otra causa
+      // del lag. El font-size ahora queda fijo (ver style.css).
     });
 
     requestAnimationFrame(animarOrbita);
